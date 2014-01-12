@@ -6,6 +6,7 @@
         searchMarkers = [],
         currentInfoWindow = null,
         oms = null,
+        pendingTruckId = null,
         dbRoot = 'https://sf-food-trucks.cloudant.com/trucks/',
         dbApprovedTrucksPath = dbRoot + '_design/approved/_view/approvedTrucksView';
 
@@ -30,7 +31,7 @@
             }
             return deferred;
         },
-        showInfoWindow: function(marker) {
+        showInfoWindow: function() {
             var truck = this;
 
             this.getDetails().done(function() {
@@ -43,13 +44,18 @@
                         returnStr += '<br />';
                         returnStr += '<a href="' + truck.schedule + '">View Schedule</a> (pdf)';
                         return returnStr;
-                    }()
+                    }(),
+                    pixelOffset: new google.maps.Size(0,-35)
                 });
                 if(currentInfoWindow) {
                     currentInfoWindow.close();
                 }
                 currentInfoWindow = infoWindow;
-                infoWindow.open(map,marker);
+                infoWindow.setPosition(new google.maps.LatLng(truck.location.latitude, truck.location.longitude));
+                infoWindow.open(map);
+                google.maps.event.addListener(infoWindow, 'closeclick', function() {
+                    router.navigate('/');
+                });
             });
         }
     });
@@ -87,7 +93,28 @@
         });
         oms.addMarker(marker);
         extendBounds(truckPosition);
+        if(truck.id === pendingTruckId) {
+            truck.showInfoWindow();
+        }
     });
+
+    var Router = Backbone.Router.extend({
+
+        routes: {
+            "truck/:id":        "truck"
+        },
+
+        truck: function(truckId) {
+            var truck = trucks.get(truckId);
+            if(truck) {
+                truck.showInfoWindow();
+            } else {
+                pendingTruckId = truckId;
+            }
+        }
+
+    });
+    var router = new Router();
 
     function extendBounds(truckPosition) {
         bounds.extend(truckPosition);
@@ -141,7 +168,7 @@
         searchBox = new google.maps.places.SearchBox($('#map-search')[0]);
 
         oms.addListener('click', function(marker, event) {
-            trucks.get(marker._id).showInfoWindow(marker);
+            router.navigate('truck/' + marker._id, {trigger: true});
         });
 
         $('.get-current-location').on('click', function() {
