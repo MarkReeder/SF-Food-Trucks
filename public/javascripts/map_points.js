@@ -58,23 +58,17 @@
     });
 
     trucks.getSortedByDistance = function(coords) {
-        var getDistance = function(truckLocation) {
-            var toRad = function(num) { return num * Math.PI / 180; };
-            var lat1 = coords.latitude,
-                lon1 = coords.longitude,
-                lat2 = (truckLocation && truckLocation.latitude)?parseFloat(truckLocation.latitude):null,
-                lon2 = (truckLocation && truckLocation.longitude)?parseFloat(truckLocation.longitude):null;
-            if(lat2 === null || lon2 === null) { return; }
-            var dLat = toRad(lat2-lat1),
-                dLon = toRad(lon2-lon1);
-            var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                    Math.sin(dLon/2) * Math.sin(dLon/2);
-            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return c;
+        var getRelativeDistance = function(truckLocation) {
+            var x = ((truckLocation && truckLocation.latitude)?parseFloat(truckLocation.latitude):NaN) - coords.latitude,
+                y = ((truckLocation && truckLocation.longitude)?parseFloat(truckLocation.longitude):NaN) - coords.longitude,
+                d = NaN;
+            x = x * x;
+            y = y * y;
+            d = Math.sqrt(x + y);
+            return isNaN(d)?Infinity:d;
         };
         return _.clone(this.models).sort(function(a,b) {
-                var aD=getDistance(a.location),bD=getDistance(b.location);
+                var aD=getRelativeDistance(a.location),bD=getRelativeDistance(b.location);
                 if(!isNaN(aD) && isNaN(bD)) { return -1; }
                 if(isNaN(aD) && !isNaN(bD)) { return 1; }
                 return aD==bD?0:aD<bD?-1:1;
