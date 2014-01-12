@@ -67,15 +67,13 @@
                 lat2 = (truckLocation && truckLocation.latitude)?parseFloat(truckLocation.latitude):null,
                 lon2 = (truckLocation && truckLocation.longitude)?parseFloat(truckLocation.longitude):null;
             if(lat2 === null || lon2 === null) { return; }
-            var R = 6371, // km
-                kmToMi = 0.621371192,
-                dLat = toRad(lat2-lat1),
+            var dLat = toRad(lat2-lat1),
                 dLon = toRad(lon2-lon1);
             var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
                 Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
                     Math.sin(dLon/2) * Math.sin(dLon/2);
             var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c * kmToMi;
+            return c;
         };
         return _.clone(this.models).sort(function(a,b) {
                 var aD=getDistance(a.location),bD=getDistance(b.location);
@@ -108,16 +106,24 @@
     }
 
     function centerAndZoom(mapPosition) {
+        var trucksToShow = 3;
         map.panTo(mapPosition);
         var sortedTrucks = trucks.getSortedByDistance({latitude: mapPosition.lat(), longitude: mapPosition.lng()});
-        // console.log('sortedTrucks', sortedTrucks);
 
         var bounds = new google.maps.LatLngBounds();
         bounds.extend(mapPosition);
-        for(var i = 0; i <= 2; i += 1) {
+        for(var i = 0; i < trucksToShow; i += 1) {
             bounds.extend(new google.maps.LatLng(sortedTrucks[i].location.latitude, sortedTrucks[i].location.longitude));
         }
         map.fitBounds(bounds);
+    }
+
+    function resetMarkers() {
+        for (var i = 0, marker; marker = searchMarkers[i]; i++) {
+            marker.setMap(null);
+        }
+
+        searchMarkers = [];
     }
 
     function initialize() {
@@ -141,13 +147,7 @@
 
         google.maps.event.addListener(searchBox, 'places_changed', function() {
             var places = searchBox.getPlaces();
-
-            for (var i = 0, marker; marker = searchMarkers[i]; i++) {
-                marker.setMap(null);
-            }
-
-            // For each place, get the icon, place name, and location.
-            searchMarkers = [];
+            resetMarkers();
             var place = places[0];
             var image = {
                 url: place.icon,
@@ -168,9 +168,6 @@
             searchMarkers.push(marker);
 
             centerAndZoom(place.geometry.location);
-
-            console.log('zoom', map.getZoom());
-            // map.setZoom(18);
         });
 
         $.getJSON(dbApprovedTrucksPath + '?limit=1000&reduce=false&callback=?', function(data){
