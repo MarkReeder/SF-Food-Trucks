@@ -1,9 +1,7 @@
 (function() {
-    var mapOptions = {
-            zoom: 13,
-            center: new google.maps.LatLng(37.7856101001445,-122.408154764336)
-        },
+    var mapOptions = {},
         map = null,
+        bounds = new google.maps.LatLngBounds(),
         searchMarkers = [],
         currentInfoWindow = null,
         oms = null,
@@ -85,14 +83,25 @@
 
     trucks.on("add", function(truck) {
         if(!(truck.name && truck.location)){ return; }
+        var truckPosition = new google.maps.LatLng(truck.location.latitude,truck.location.longitude);
         var marker = new google.maps.Marker({
-            position: new google.maps.LatLng(truck.location.latitude,truck.location.longitude),
+            position: truckPosition,
             map: map,
             title: truck.name,
             _id: truck.id
         });
         oms.addMarker(marker);
+        extendBounds(truckPosition);
     });
+
+    function extendBounds(truckPosition) {
+        bounds.extend(truckPosition);
+        _fitBounds();
+    }
+
+    var _fitBounds = _.debounce(function() {
+        map.fitBounds(bounds);
+    }, 100);
 
     function setCurrentLocation(position) {
         var mapPosition = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
@@ -110,7 +119,7 @@
         map.panTo(mapPosition);
         var sortedTrucks = trucks.getSortedByDistance({latitude: mapPosition.lat(), longitude: mapPosition.lng()});
 
-        var bounds = new google.maps.LatLngBounds();
+        bounds = new google.maps.LatLngBounds();
         bounds.extend(mapPosition);
         for(var i = 0; i < trucksToShow; i += 1) {
             bounds.extend(new google.maps.LatLng(sortedTrucks[i].location.latitude, sortedTrucks[i].location.longitude));
