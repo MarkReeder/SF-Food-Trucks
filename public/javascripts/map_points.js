@@ -1,6 +1,7 @@
 (function() {
     var mapOptions = {},
         map = null,
+        searchBox = null,
         bounds = new google.maps.LatLngBounds(),
         searchMarkers = [],
         currentInfoWindow = null,
@@ -95,6 +96,7 @@
 
     var _fitBounds = _.debounce(function() {
         map.fitBounds(bounds);
+        searchBox.setBounds(bounds);
     }, 100);
 
     function setCurrentLocation(position) {
@@ -136,7 +138,7 @@
                 nearbyDistance: 5,
                 legWeight: 1
             });
-        var searchBox = new google.maps.places.SearchBox($('#map-search')[0]);
+        searchBox = new google.maps.places.SearchBox($('#map-search')[0]);
 
         oms.addListener('click', function(marker, event) {
             trucks.get(marker._id).showInfoWindow(marker);
