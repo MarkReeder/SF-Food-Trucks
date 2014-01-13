@@ -8,7 +8,34 @@
         oms = null,
         pendingTruckId = null,
         dbRoot = 'https://sf-food-trucks.cloudant.com/trucks/',
-        dbApprovedTrucksPath = dbRoot + '_design/approved/_view/approvedTrucksView';
+        dbApprovedTrucksPath = dbRoot + '_design/approved/_view/approvedTrucksView',
+        truckDetailsTemplate = null;
+
+    _.templateSettings = {
+        interpolate: /\{\{(.+?)\}\}/g
+    };
+    google.maps.event.addDomListener(window, 'load', initializeMap);
+    $(document).ready(function() {
+        truckDetailsTemplate = _.template($('#truckDetailsTemplate').html());
+
+        $('body').on('click', '.close-modal', function() {
+            currentInfoWindow.close();
+        });
+
+        $('body').on('click', '.get-current-location', function() {
+            var $this = $(this);
+            if(Modernizr.geolocation) {
+                $this.addClass('searching');
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    $this.removeClass('searching');
+                    setCurrentLocation(position);
+                }, function() {
+                    $this.removeClass('searching');
+                    alert('Unable to find your location, try searching.');
+                });
+            }
+        });
+    });
 
     var Truck = Backbone.Model.extend({
         initialize: function(options) {
@@ -31,31 +58,46 @@
             }
             return deferred;
         },
+        panTo: function() {
+            var truckPosition = new google.maps.LatLng(this.location.latitude, this.location.longitude);
+            try {
+                map.panTo(truckPosition);
+                map.panBy(0,-75); // Account for search box at the top of the page
+            } catch(e) {} // Discard errors
+        },
         showInfoWindow: function() {
             var truck = this;
 
             this.getDetails().done(function() {
-                var infoWindow = new google.maps.InfoWindow({
-                    content: function() {
-                        var returnStr = '';
-                        returnStr += '<h1>' + truck.applicant + '</h1>';
-                        returnStr += '<p>' + truck.address + '</p>';
-                        returnStr += '<p>' + truck.fooditems + '</p>';
-                        returnStr += '<br />';
-                        returnStr += '<a href="' + truck.schedule + '">View Schedule</a> (pdf)';
-                        return returnStr;
-                    }(),
-                    pixelOffset: new google.maps.Size(0,-35)
-                });
+                var content = truckDetailsTemplate(truck),
+                    $modal = null;
                 if(currentInfoWindow) {
                     currentInfoWindow.close();
                 }
-                currentInfoWindow = infoWindow;
-                infoWindow.setPosition(new google.maps.LatLng(truck.location.latitude, truck.location.longitude));
-                infoWindow.open(map);
-                google.maps.event.addListener(infoWindow, 'closeclick', function() {
-                    router.navigate('/');
-                });
+                if($(window).width() > 980) {
+                    var infoWindow = new google.maps.InfoWindow({
+                            content: content,
+                            pixelOffset: new google.maps.Size(0,-35),
+                            disableAutoPan: true
+                        }),
+                        truckPosition = new google.maps.LatLng(truck.location.latitude, truck.location.longitude);
+                    currentInfoWindow = infoWindow;
+                    infoWindow.setPosition(truckPosition);
+                    infoWindow.open(map);
+                    truck.panTo();
+                    google.maps.event.addListener(infoWindow, 'closeclick', function() {
+                        router.navigate('/', {trigger: true});
+                    });
+                } else { // Render full-screen overlay for mobile devices
+                    $modal = $('.modal').omniWindow({callbacks:{positioning: $.noop}})
+                        .html(content)
+                        .trigger('show');
+                    currentInfoWindow = {
+                        close: function() {
+                            $modal.trigger('hide');
+                        }
+                    };
+                }
             });
         }
     });
@@ -82,6 +124,35 @@
             })
     };
 
+    trucks.extendBounds = function(truckPosition) {
+        bounds.extend(truckPosition);
+        this._fitBounds();
+    };
+
+    trucks._fitBounds = _.debounce(function() {
+        map.fitBounds(bounds);
+        if(pendingTruckId) {
+            var truck = trucks.get(pendingTruckId);
+            truck.panTo();
+        }
+        searchBox.setBounds(bounds);
+    }, 100);
+
+
+
+    trucks.centerAndZoom = function(mapPosition) {
+        var minTrucksToShow = 3;
+        map.panTo(mapPosition);
+        var sortedTrucks = trucks.getSortedByDistance({latitude: mapPosition.lat(), longitude: mapPosition.lng()});
+
+        bounds = new google.maps.LatLngBounds();
+        bounds.extend(mapPosition);
+        for(var i = 0; i < minTrucksToShow; i += 1) {
+            bounds.extend(new google.maps.LatLng(sortedTrucks[i].location.latitude, sortedTrucks[i].location.longitude));
+        }
+        map.fitBounds(bounds);
+    };
+
     trucks.on("add", function(truck) {
         if(!(truck.name && truck.location)){ return; }
         var truckPosition = new google.maps.LatLng(truck.location.latitude,truck.location.longitude);
@@ -92,7 +163,7 @@
             _id: truck.id
         });
         oms.addMarker(marker);
-        extendBounds(truckPosition);
+        this.extendBounds(truckPosition);
         if(truck.id === pendingTruckId) {
             truck.showInfoWindow();
         }
@@ -101,10 +172,17 @@
     var Router = Backbone.Router.extend({
 
         routes: {
-            "truck/:id":        "truck"
+            "":                 "index",
+            "truck/:name/:id":  "truck"
         },
 
-        truck: function(truckId) {
+        index: function() {
+            if(currentInfoWindow) {
+                currentInfoWindow.close();
+            }
+        },
+
+        truck: function(truckName, truckId) {
             var truck = trucks.get(truckId);
             if(truck) {
                 truck.showInfoWindow();
@@ -116,16 +194,6 @@
     });
     var router = new Router();
 
-    function extendBounds(truckPosition) {
-        bounds.extend(truckPosition);
-        _fitBounds();
-    }
-
-    var _fitBounds = _.debounce(function() {
-        map.fitBounds(bounds);
-        searchBox.setBounds(bounds);
-    }, 100);
-
     function setCurrentLocation(position) {
         var mapPosition = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
 
@@ -134,20 +202,7 @@
             title: 'Your Current Location',
             position: mapPosition
         });
-        centerAndZoom(mapPosition);
-    }
-
-    function centerAndZoom(mapPosition) {
-        var trucksToShow = 3;
-        map.panTo(mapPosition);
-        var sortedTrucks = trucks.getSortedByDistance({latitude: mapPosition.lat(), longitude: mapPosition.lng()});
-
-        bounds = new google.maps.LatLngBounds();
-        bounds.extend(mapPosition);
-        for(var i = 0; i < trucksToShow; i += 1) {
-            bounds.extend(new google.maps.LatLng(sortedTrucks[i].location.latitude, sortedTrucks[i].location.longitude));
-        }
-        map.fitBounds(bounds);
+        trucks.centerAndZoom(mapPosition);
     }
 
     function resetMarkers() {
@@ -158,8 +213,9 @@
         searchMarkers = [];
     }
 
-    function initialize() {
+    function initializeMap() {
         map = new google.maps.Map($('#map-canvas')[0], mapOptions);
+
         oms = new OverlappingMarkerSpiderfier(map, {
                 keepSpiderfied: true,
                 nearbyDistance: 5,
@@ -168,13 +224,7 @@
         searchBox = new google.maps.places.SearchBox($('#map-search')[0]);
 
         oms.addListener('click', function(marker, event) {
-            router.navigate('truck/' + marker._id, {trigger: true});
-        });
-
-        $('.get-current-location').on('click', function() {
-            if(Modernizr.geolocation) {
-                navigator.geolocation.getCurrentPosition(setCurrentLocation);
-            }
+            router.navigate('truck/' + encodeURIComponent(marker.title).replace(/%20/g, '+') + '/' + marker._id, {trigger: true});
         });
 
         google.maps.event.addListener(searchBox, 'places_changed', function() {
@@ -189,7 +239,7 @@
                 scaledSize: new google.maps.Size(25, 25)
             };
 
-            // Create a marker for each place.
+            // Create a marker for the first search result
             var marker = new google.maps.Marker({
                 map: map,
                 icon: image,
@@ -199,7 +249,7 @@
 
             searchMarkers.push(marker);
 
-            centerAndZoom(place.geometry.location);
+            trucks.centerAndZoom(place.geometry.location);
         });
 
         $.getJSON(dbApprovedTrucksPath + '?limit=1000&reduce=false&callback=?', function(data){
@@ -208,6 +258,5 @@
         });
     }
 
-    google.maps.event.addDomListener(window, 'load', initialize);
     Backbone.history.start({pushState: true});
 })();

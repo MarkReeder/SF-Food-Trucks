@@ -13,6 +13,16 @@ append head
 
 
 block content
-  input#map-search.search-box(type="text", placeholder="Search Box")
-  .get-current-location 0
+  input#map-search.search-box(type="text", placeholder="search")
+  .get-current-location @
   #map-canvas
+  .ow-overlay.ow-closed
+  .modal.ow-closed
+  script(type="text/x-handlebars-template")#truckDetailsTemplate
+    .close-modal X
+    h1 {{ applicant }}
+    p {{ address }}
+    p {{ fooditems }}
+    span
+      a(href="{{ schedule }}") View Schedule
+      |  (pdf)
