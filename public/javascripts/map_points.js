@@ -95,6 +95,7 @@
                     currentInfoWindow = {
                         close: function() {
                             $modal.trigger('hide');
+                            router.navigate('/', {trigger: true});
                         }
                     };
                 }
