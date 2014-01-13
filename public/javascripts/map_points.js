@@ -2,11 +2,9 @@
     var mapOptions = {},
         map = null,
         searchBox = null,
-        bounds = new google.maps.LatLngBounds(),
         searchMarkers = [],
         currentInfoWindow = null,
         oms = null,
-        pendingTruckId = null,
         dbRoot = 'https://sf-food-trucks.cloudant.com/trucks/',
         dbApprovedTrucksPath = dbRoot + '_design/approved/_view/approvedTrucksView',
         truckDetailsTemplate = null;
@@ -107,6 +105,9 @@
         model: Truck
     });
 
+    trucks.bounds = new google.maps.LatLngBounds();
+    trucks.pendingTruckId = null;
+
     trucks.getSortedByDistance = function(coords) {
         var getRelativeDistance = function(truckLocation) {
             var x = ((truckLocation && truckLocation.latitude)?parseFloat(truckLocation.latitude):NaN) - coords.latitude,
@@ -126,32 +127,30 @@
     };
 
     trucks.extendBounds = function(truckPosition) {
-        bounds.extend(truckPosition);
+        this.bounds.extend(truckPosition);
         this._fitBounds();
     };
 
     trucks._fitBounds = _.debounce(function() {
-        map.fitBounds(bounds);
-        if(pendingTruckId) {
-            var truck = trucks.get(pendingTruckId);
+        map.fitBounds(this.bounds);
+        if(this.pendingTruckId) {
+            var truck = trucks.get(this.pendingTruckId);
             truck.panTo();
         }
-        searchBox.setBounds(bounds);
+        searchBox.setBounds(this.bounds);
     }, 100);
-
-
 
     trucks.centerAndZoom = function(mapPosition) {
         var minTrucksToShow = 3;
         map.panTo(mapPosition);
         var sortedTrucks = trucks.getSortedByDistance({latitude: mapPosition.lat(), longitude: mapPosition.lng()});
 
-        bounds = new google.maps.LatLngBounds();
-        bounds.extend(mapPosition);
+        this.bounds = new google.maps.LatLngBounds();
+        this.bounds.extend(mapPosition);
         for(var i = 0; i < minTrucksToShow; i += 1) {
-            bounds.extend(new google.maps.LatLng(sortedTrucks[i].location.latitude, sortedTrucks[i].location.longitude));
+            this.bounds.extend(new google.maps.LatLng(sortedTrucks[i].location.latitude, sortedTrucks[i].location.longitude));
         }
-        map.fitBounds(bounds);
+        map.fitBounds(this.bounds);
     };
 
     trucks.on("add", function(truck) {
@@ -165,7 +164,7 @@
         });
         oms.addMarker(marker);
         this.extendBounds(truckPosition);
-        if(truck.id === pendingTruckId) {
+        if(truck.id === this.pendingTruckId) {
             truck.showInfoWindow();
         }
     });
@@ -188,7 +187,7 @@
             if(truck) {
                 truck.showInfoWindow();
             } else {
-                pendingTruckId = truckId;
+                trucks.pendingTruckId = truckId;
             }
         }
 
