@@ -9,11 +9,9 @@
         dbApprovedTrucksPath = dbRoot + '_design/approved/_view/approvedTrucksView',
         truckDetailsTemplate = null;
 
-    _.templateSettings = {
-        interpolate: /\{\{(.+?)\}\}/g
-    };
     google.maps.event.addDomListener(window, 'load', initializeMap);
     $(document).ready(function() {
+        var seenTour = Modernizr.localstorage && localStorage.getItem('seenTour');
         truckDetailsTemplate = _.template($('#truckDetailsTemplate').html());
 
         $('body').on('click', '.close-modal', function() {
@@ -33,6 +31,34 @@
                 });
             }
         });
+        if(!seenTour) {
+            var steps = [{
+                content: '<p>Welcome to SF Food Trucks. You may search for a location to find nearby food trucks.</p>',
+                highlightTarget: true,
+                nextButton: true,
+                target: $('#map-search'),
+                my: 'top center',
+                at: 'bottom center'
+            }, {
+                content: '<p>Or your current location can be found automatically.</p>',
+                highlightTarget: true,
+                nextButton: true,
+                target: $('#get-current-location'),
+                my: 'top center',
+                at: 'bottom center'
+            }];
+
+            var tour = new Tourist.Tour({
+                steps: steps,
+                tipClass: 'Bootstrap',
+                tipOptions:{ showEffect: 'slidein' }
+            });
+            tour.start();
+            if(Modernizr.localstorage) {
+                localStorage.setItem('seenTour', 1);
+            }
+        }
+
     });
 
     var Truck = Backbone.Model.extend({

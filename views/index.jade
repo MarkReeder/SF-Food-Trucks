@@ -7,22 +7,26 @@ append head
         margin: 0px;
         padding: 0px
       }
+  link(rel="stylesheet", href="/stylesheets/tourist.css", type="text/css", media="screen")
+  link(rel="stylesheet", href="//netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css", type="text/css", media="screen")
+
   script(src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false&libraries=places")
-  script(src='/javascripts/oms.min.js')
+  script(src="/javascripts/oms.min.js")
   script(src="/javascripts/map_points.js")
+  script(src="/javascripts/tourist.min.js")
 
 
 block content
   input#map-search.search-box(type="text", placeholder="search")
-  .get-current-location @
+  #get-current-location.get-current-location @
   #map-canvas
   .ow-overlay.ow-closed
   .modal.ow-closed
-  script(type="text/x-handlebars-template")#truckDetailsTemplate
+  script(type="text/x-template")#truckDetailsTemplate
     .close-modal X
-    h1 {{ applicant }}
-    p {{ address }}
-    p {{ fooditems }}
+    h1 <%= applicant %>
+    p <%= address %>
+    p <%= fooditems %>
     span
-      a(href="{{ schedule }}") View Schedule
+      a(href="<%= schedule %>") View Schedule
       |  (pdf)
